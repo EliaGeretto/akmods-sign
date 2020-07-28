@@ -1,0 +1,12 @@
+[Unit]
+Description=Signs new kmods built by akmod packages for a given kernel
+After=akmods@%i.service
+PartOf=akmods@%i.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=akmods-sign --from-kernel-posttrans --kernel %i
+
+[Install]
+RequiredBy=akmods@%i.service

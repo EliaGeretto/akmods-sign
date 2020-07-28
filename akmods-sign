@@ -1,0 +1,95 @@
+#!/usr/bin/bash
+#
+# Script that signs kernel modules built with akmods
+#
+# Author:               Elia Geretto            Date: 2020-07-28
+# Original script:      Michael Goodwin         Date: 2016-09-21
+
+# 1. Install all the files in this package
+#
+# 2. Create signing keys (store these somewhere useful and safe):
+#    $ mkdir -p /etc/pki/tls/private/mok
+#    $ cd !$
+#    $ openssl req -new -x509 -newkey rsa:2048 -keyout MOK.priv \
+#     -outform DER -out MOK.der -nodes -days 36500 -subj "/CN=Descriptive name/"
+#
+# 3. Replace PRIVATE_KEY and CERTIFICATE variables below with the
+#    key/cert paths from above. (Unless you kept the same paths)
+#
+# 4. Run the script as root to do a first-sign of the modules
+#
+# 5. Import the new certificate into MOK (one time thing):
+#    $ sudo mokutil --import MOK.der
+#
+# 6. Reboot and follow the instructions to authorize the key:
+#    https://sourceware.org/systemtap/wiki/SecureBoot
+
+set -euo pipefail
+
+KMOD_RPM_DIR=/var/cache/akmods
+PRIVATE_KEY=/etc/pki/tls/private/mok/MOK.priv
+CERTIFICATE=/etc/pki/tls/private/mok/MOK.der
+
+# Find all kernel modules packaged by akmods for the specified kernel
+get_ko_array() {
+	readarray -t kmod_ko_array < <(
+		find "${KMOD_RPM_DIR}" \
+			-name "*${1}*.rpm" \
+			-exec sh -c 'rpm -qlp "$1" | grep ".ko$"' _ {} \;
+	)
+}
+
+# Default to the current kernel
+target_kernel="$(uname -r)"
+
+while [[ $# -gt 0 ]]
+do
+	case "${1}" in
+		--kernel|--kernels)
+			shift
+			if [[ ! "${1}" ]]
+			then
+				echo "ERROR: Please provide the kernel-version to build for together with --kernel" >&2
+				exit 1
+			elif [[ ! -r "/lib/modules/${1}/extra/" ]]
+			then
+				echo "ERROR: Could not find modules directory for selected kernel: ${1}" >&2
+				exit 1
+			fi
+
+			target_kernel="${1}"
+			shift
+			;;
+
+		--from-posttrans|--from-kernel-posttrans|--from-akmod-posttrans)
+			# ignored
+			shift
+			;;
+
+		--from-init)
+			# ignored
+			shift
+			;;
+
+		*)
+			echo "ERROR: Unknown option '${1}'." >&2
+			exit 1
+			;;
+	esac
+done
+
+sign_script="/usr/src/kernels/${target_kernel}/scripts/sign-file"
+
+get_ko_array "${target_kernel}"
+
+# Sign all the modules from akmods for the specified kernel
+for kmod_ko in "${kmod_ko_array[@]}"
+do
+	if ! strings "${kmod_ko}" | tail -n1 | grep -q '~Module signature appended~'
+	then
+		echo "Signing ${kmod_ko}..."
+		"$sign_script" sha256 "$PRIVATE_KEY" "$CERTIFICATE" "${kmod_ko}"
+	else
+		echo "${kmod_ko} already signed."
+	fi
+done

@@ -1,0 +1,13 @@
+[Unit]
+Description=Signs new kmods built by akmod packages
+Before=display-manager.service
+After=akmods.service
+PartOf=akmods.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=akmods-sign --from-init
+
+[Install]
+RequiredBy=akmods.service
