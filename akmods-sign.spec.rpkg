@@ -1,0 +1,46 @@
+# vim: syntax=spec
+
+Name:       {{{ git_dir_name }}}
+Version:    {{{ git_dir_version }}}
+Release:    1%{?dist}
+Summary:    Scripts that automate the signing of kernel modules
+
+License:    MIT
+URL:        https://github.com/EliaGeretto/akmods-sign
+
+BuildArch:  noarch
+
+VCS:        {{{ git_dir_vcs }}}
+Source:     {{{ git_dir_pack }}}
+
+%description
+This package contains various scripts that take care of signing every module
+that is built using akmods.
+
+%prep
+{{{ git_dir_setup_macro }}}
+
+%build
+# Nothing to build
+
+%install
+mkdir -p %{buildroot}%{_sbindir} \
+         %{buildroot}%{_sysconfdir}/kernel/postinst.d \
+         %{buildroot}%{_sysconfdir}/kernel/prerm.d \
+         %{buildroot}%{_unitdir}
+
+install akmods-sign %{buildroot}%{_sbindir}/
+install 61-akmods-sign-enable.sh %{buildroot}%{_sysconfdir}/kernel/postinst.d/
+install 61-akmods-sign-disable.sh %{buildroot}%{_sysconfdir}/kernel/prerm.d/
+install -m 644 akmods-sign.service %{buildroot}%{_unitdir}
+install -m 644 akmods-sign@.service %{buildroot}%{_unitdir}
+
+%files
+%{_sysconfdir}/kernel/postinst.d/61-akmods-sign-enable.sh
+%{_sysconfdir}/kernel/prerm.d/61-akmods-sign-disable.sh
+%{_unitdir}/akmods-sign.service
+%{_unitdir}/akmods-sign@.service
+%{_sbindir}/akmods-sign
+
+%changelog
+{{{ git_dir_changelog }}}
